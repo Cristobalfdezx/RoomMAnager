@@ -180,3 +180,5 @@ model Contract {
   @@index([endDate])
   @@index([tenantId])
 }
+
+// Forzando actualizacion a Postgres
