@@ -33,7 +33,8 @@ import {
   X as XIcon,
   Share2,
   Euro,
-  FileText
+  FileText,
+  LogOut // Importado icono logout
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,7 @@ import { PaymentsView } from '@/components/payments-view';
 import { ContractsView } from '@/components/contracts-view';
 import { LoginForm } from '@/components/login-form';
 import { TenantPortal } from '@/components/tenant-portal';
+import { useAuth } from '@/contexts/AuthContext'; // Importado AuthContext
 
 // Types
 interface Property {
@@ -198,13 +200,15 @@ function SidebarContent({
   setActiveView, 
   setSidebarOpen, 
   openIncidents,
-  onSeedData 
+  onSeedData,
+  logout
 }: { 
   activeView: string; 
   setActiveView: (v: string) => void; 
   setSidebarOpen: (v: boolean) => void;
   openIncidents: number;
   onSeedData: () => void;
+  logout: () => void;
 }) {
   return (
     <div className="flex flex-col h-full">
@@ -245,7 +249,7 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className="p-4 border-t">
+      <div className="p-4 border-t space-y-2">
         <Button 
           variant="outline" 
           className="w-full justify-start gap-2"
@@ -253,6 +257,14 @@ function SidebarContent({
         >
           <Database className="w-4 h-4" />
           Cargar datos demo
+        </Button>
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+          onClick={logout}
+        >
+          <LogOut className="w-4 h-4" />
+          Cerrar Sesión
         </Button>
       </div>
     </div>
@@ -1111,6 +1123,9 @@ export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
+  // Auth state
+  const { user, loading: authLoading, logout } = useAuth(); // Usando useAuth
+  
   // Data states
   const [properties, setProperties] = useState<Property[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -1135,407 +1150,3 @@ export default function App() {
     category: 'other',
     priority: 'medium',
     roomId: '',
-    tenantId: ''
-  });
-
-  // PWA Install state
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  // Detect iOS and standalone mode
-  useEffect(() => {
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || 
-                       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-    
-    setIsIOS(iOS);
-    setIsStandalone(standalone);
-    
-    // Show install banner for iOS users who haven't installed
-    if (iOS && !standalone) {
-      const dismissed = localStorage.getItem('pwa-install-dismissed');
-      if (!dismissed) {
-        setTimeout(() => setShowInstallBanner(true), 2000);
-      }
-    }
-  }, []);
-
-  // Listen for install prompt
-  useEffect(() => {
-    const handleBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-      setShowInstallBanner(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-  }, []);
-
-  // Install PWA
-  const installPWA = useCallback(async () => {
-    if (!installPrompt) return;
-    
-    const promptEvent = installPrompt as unknown as { prompt: () => void; userChoice: Promise<{ outcome: string }> };
-    promptEvent.prompt();
-    
-    const result = await promptEvent.userChoice;
-    if (result.outcome === 'accepted') {
-      toast.success('¡App instalada correctamente!');
-      setShowInstallBanner(false);
-      setInstallPrompt(null);
-    }
-  }, [installPrompt]);
-
-  // Dismiss install banner
-  const dismissInstallBanner = useCallback(() => {
-    setShowInstallBanner(false);
-    localStorage.setItem('pwa-install-dismissed', 'true');
-  }, []);
-
-  // Fetch all data
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [propsRes, roomsRes, tenantsRes, incidentsRes, dashRes] = await Promise.all([
-        fetch('/api/properties'),
-        fetch('/api/rooms'),
-        fetch('/api/tenants'),
-        fetch('/api/incidents'),
-        fetch('/api/dashboard')
-      ]);
-      
-      const [props, roomsData, tenantsData, incidentsData, dash] = await Promise.all([
-        propsRes.json(),
-        roomsRes.json(),
-        tenantsRes.json(),
-        incidentsRes.json(),
-        dashRes.json()
-      ]);
-      
-      setProperties(props);
-      setRooms(roomsData);
-      setTenants(tenantsData);
-      setIncidents(incidentsData);
-      setDashboardData(dash);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar los datos');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // Seed demo data
-  const seedData = useCallback(async () => {
-    try {
-      const res = await fetch('/api/seed', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Datos de demostración creados');
-        fetchData();
-      }
-    } catch {
-      toast.error('Error al crear datos de demostración');
-    }
-  }, [fetchData]);
-
-  // Create incident
-  const createIncident = useCallback(async () => {
-    try {
-      const res = await fetch('/api/incidents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newIncident)
-      });
-      const data = await res.json();
-      if (data.id) {
-        toast.success('Incidencia creada correctamente');
-        setNewIncidentOpen(false);
-        setNewIncident({
-          title: '',
-          description: '',
-          category: 'other',
-          priority: 'medium',
-          roomId: '',
-          tenantId: ''
-        });
-        fetchData();
-      }
-    } catch {
-      toast.error('Error al crear incidencia');
-    }
-  }, [newIncident, fetchData]);
-
-  // Update incident status
-  const updateIncidentStatus = useCallback(async (id: string, status: string, message: string) => {
-    try {
-      await fetch(`/api/incidents/${id}/updates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, status })
-      });
-      toast.success('Estado actualizado');
-      fetchData();
-      // Update selected incident if it's the one being viewed
-      if (selectedIncident?.id === id) {
-        setSelectedIncident(prev => prev ? { ...prev, status } : null);
-      }
-    } catch {
-      toast.error('Error al actualizar');
-    }
-  }, [fetchData, selectedIncident?.id]);
-
-  // Add update to incident
-  const addIncidentUpdate = useCallback(async (incidentId: string, message: string) => {
-    try {
-      await fetch(`/api/incidents/${incidentId}/updates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      });
-      toast.success('Actualización añadida');
-      fetchData();
-    } catch {
-      toast.error('Error al añadir actualización');
-    }
-  }, [fetchData]);
-
-  // Handle incident click
-  const handleIncidentClick = useCallback((incident: Incident) => {
-    setSelectedIncident(incident);
-    setIncidentDetailOpen(true);
-  }, []);
-
-  // Empty state
-  if (!loading && properties.length === 0) {
-    return <WelcomeScreen onSeedData={seedData} />;
-  }
-
-  // Render current view
-  const renderView = () => {
-    switch (activeView) {
-      case 'dashboard':
-        return (
-          <DashboardView 
-            dashboardData={dashboardData} 
-            onIncidentClick={handleIncidentClick}
-            onViewAllIncidents={() => setActiveView('incidents')}
-          />
-        );
-      case 'payments':
-        return <PaymentsView tenants={tenants} />;
-      case 'contracts':
-        return <ContractsView tenants={tenants} />;
-      case 'incidents':
-        return (
-          <IncidentsView
-            incidents={incidents}
-            rooms={rooms}
-            incidentFilter={incidentFilter}
-            setIncidentFilter={setIncidentFilter}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            newIncidentOpen={newIncidentOpen}
-            setNewIncidentOpen={setNewIncidentOpen}
-            newIncident={newIncident}
-            setNewIncident={setNewIncident}
-            onCreateIncident={createIncident}
-            onIncidentClick={handleIncidentClick}
-          />
-        );
-      case 'properties':
-        return <PropertiesView properties={properties} rooms={rooms} />;
-      case 'tenants':
-        return <TenantsView tenants={tenants} />;
-      default:
-        return (
-          <DashboardView 
-            dashboardData={dashboardData} 
-            onIncidentClick={handleIncidentClick}
-            onViewAllIncidents={() => setActiveView('incidents')}
-          />
-        );
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Mobile Sidebar */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="p-0 w-72">
-          <SidebarContent 
-            activeView={activeView}
-            setActiveView={setActiveView}
-            setSidebarOpen={setSidebarOpen}
-            openIncidents={dashboardData?.overview.openIncidents || 0}
-            onSeedData={seedData}
-          />
-        </SheetContent>
-      </Sheet>
-
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col border-r bg-white">
-        <SidebarContent 
-          activeView={activeView}
-          setActiveView={setActiveView}
-          setSidebarOpen={setSidebarOpen}
-          openIncidents={dashboardData?.overview.openIncidents || 0}
-          onSeedData={seedData}
-        />
-      </aside>
-
-      {/* Main Content */}
-      <main className="lg:pl-72">
-        {/* Top Bar */}
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b">
-          <div className="flex items-center justify-between px-4 py-3 lg:px-6">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden"
-                onClick={() => setSidebarOpen(true)}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </Button>
-              <h1 className="text-xl font-bold lg:hidden">RoomManager</h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={fetchData}>
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-              <Avatar className="w-8 h-8">
-                <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-xs">
-                  AD
-                </AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </header>
-
-        {/* Page Content */}
-        <div className="p-4 lg:p-6 pb-20">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
-            </div>
-          ) : (
-            <motion.div
-              key={activeView}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {renderView()}
-            </motion.div>
-          )}
-        </div>
-      </main>
-
-      {/* Incident Detail Dialog */}
-      <IncidentDetailDialog
-        incident={selectedIncident}
-        open={incidentDetailOpen}
-        onOpenChange={setIncidentDetailOpen}
-        onUpdateStatus={updateIncidentStatus}
-        onAddUpdate={addIncidentUpdate}
-      />
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-50">
-        <div className="flex justify-around py-2">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveView(item.id)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-                activeView === item.id
-                  ? 'text-emerald-600'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="text-xs font-medium">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      {/* PWA Install Banner */}
-      <AnimatePresence>
-        {showInstallBanner && !isStandalone && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-20 lg:bottom-4 left-4 right-4 z-50"
-          >
-            <Card className="shadow-2xl border-0 bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <Building2 className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold">Instalar RoomManager</p>
-                    <p className="text-sm text-white/80">
-                      {isIOS 
-                        ? 'Toca el botón "Compartir" y luego "Añadir a pantalla de inicio"'
-                        : 'Añade la app a tu pantalla de inicio para acceso rápido'
-                      }
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {!isIOS && installPrompt && (
-                      <Button 
-                        size="sm" 
-                        variant="secondary"
-                        onClick={installPWA}
-                        className="bg-white text-emerald-600 hover:bg-white/90"
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        Instalar
-                      </Button>
-                    )}
-                    {isIOS && (
-                      <Button 
-                        size="sm" 
-                        variant="secondary"
-                        className="bg-white text-emerald-600 hover:bg-white/90"
-                        onClick={() => {
-                          toast.info('Toca el icono "Compartir" en Safari y selecciona "Añadir a pantalla de inicio"');
-                        }}
-                      >
-                        <Share2 className="w-4 h-4 mr-1" />
-                        Cómo
-                      </Button>
-                    )}
-                    <Button 
-                      size="icon" 
-                      variant="ghost" 
-                      className="text-white hover:bg-white/20"
-                      onClick={dismissInstallBanner}
-                    >
-                      <XIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-

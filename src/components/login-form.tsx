@@ -7,42 +7,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface LoginProps {
-  onLogin: (user: any) => void;
-}
-
-export function LoginForm({ onLogin }: LoginProps) {
+export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
+  const { login } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    setLocalError('');
+    setIsLoading(true);
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Error al iniciar sesión');
-        setLoading(false);
-        return;
-      }
-
-      onLogin(data.user);
-    } catch {
-      setError('Error de conexión');
-      setLoading(false);
+    const result = await login(email, password);
+    
+    if (!result.success) {
+      setLocalError(result.error || 'Error al iniciar sesión');
+      setIsLoading(false);
     }
+    // Si tiene éxito, el componente padre (page.tsx) detectará el usuario y cambiará la vista automáticamente.
   };
 
   return (
@@ -69,7 +54,7 @@ export function LoginForm({ onLogin }: LoginProps) {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="tu@email.com"
+                    placeholder="admin@demo.com"
                     className="pl-10"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -93,23 +78,23 @@ export function LoginForm({ onLogin }: LoginProps) {
                 </div>
               </div>
 
-              {error && (
+              {localError && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg"
                 >
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {error}
+                  {localError}
                 </motion.div>
               )}
 
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700"
-                disabled={loading}
+                disabled={isLoading}
               >
-                {loading ? (
+                {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Entrando...
@@ -122,10 +107,10 @@ export function LoginForm({ onLogin }: LoginProps) {
 
             <div className="mt-6 pt-6 border-t text-center">
               <p className="text-xs text-muted-foreground">
-                Demo: admin@roommanager.com / 123456
+                Credenciales Demo:
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                o maria@email.com / 123456 (inquilino)
+              <p className="text-xs font-medium text-emerald-600 mt-1">
+                admin@demo.com / admin123
               </p>
             </div>
           </CardContent>
